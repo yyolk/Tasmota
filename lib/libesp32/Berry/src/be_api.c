@@ -23,6 +23,11 @@
 
 #define retreg(vm)      ((vm)->cf->func)
 
+struct solidfuncinfo {
+    const char *name;
+    bclosure *function;
+};
+
 static void class_init(bvm *vm, bclass *c, const bnfuncinfo *lib)
 {
     if (lib) {
@@ -31,19 +36,19 @@ static void class_init(bvm *vm, bclass *c, const bnfuncinfo *lib)
             if (lib->function) { /* method */
                 be_prim_method_bind(vm, c, s, lib->function);
             } else {
-                be_member_bind(vm, c, s); /* member */
+                be_member_bind(vm, c, s, btrue); /* member */
             }
             ++lib;
         }
         if (lib->function == (bntvfunc) BE_CLOSURE) {
             /* next section is closures */
-            ++lib;
-            while (lib->name) {
-                if (lib->function) { /* method */
-                    bstring *s = be_newstr(vm, lib->name);
-                    be_closure_method_bind(vm, c, s, (bclosure*) lib->function);
+            struct solidfuncinfo *slib = (struct solidfuncinfo*)++lib;
+            while (slib->name) {
+                if (slib->function) { /* method */
+                    bstring *s = be_newstr(vm, slib->name);
+                    be_closure_method_bind(vm, c, s, slib->function);
                 }
-                ++lib;
+                ++slib;
             }
         }
         be_map_release(vm, c->members); /* clear space */
@@ -201,6 +206,12 @@ BERRY_API bbool be_isinstance(bvm *vm, int index)
 {
     bvalue *v = be_indexof(vm, index);
     return var_isinstance(v);
+}
+
+BERRY_API bbool be_ismodule(bvm *vm, int index)
+{
+    bvalue *v = be_indexof(vm, index);
+    return var_ismodule(v);
 }
 
 BERRY_API bbool be_islist(bvm *vm, int index)
@@ -638,6 +649,9 @@ static int ins_member(bvm *vm, int index, const char *k)
     if (var_isinstance(o)) {
         binstance *obj = var_toobj(o);
         type = be_instance_member(vm, obj, be_newstr(vm, k), top);
+        if (type == BE_NONE) {
+            type = BE_NIL;
+        }
     }
     return type;
 }
